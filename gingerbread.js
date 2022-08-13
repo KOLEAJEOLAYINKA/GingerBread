@@ -26,9 +26,9 @@ class GingerBread extends EventEmitter {
   traderjoeSwapRate = 0.3; // 0.3%
 
   /**
-   * @param {Object} Token0 - should have properties 'address' and 'volume' - WAVAX
-   * @param {Object} Token1 - should have properties 'address' and 'volume' - ERC20 token
-   * @param {Boolean} reverse - specify if price should be inverted for token pair
+   * @param token0
+   * @param token1
+   * @param reverseRate
    */
   constructor(token0, token1, reverseRate = false) {
     /**
@@ -106,23 +106,30 @@ class GingerBread extends EventEmitter {
 
 
         // - check if the difference can cover DEX fees ------------------------------------------------------->
-        // calculate these again 👇
-        const tokenToBorrow = pangolinPrice > traderjoePrice ? this.token1 : this.token0;
-        const tokenToBorrowSymbol = pangolinPrice > traderjoePrice ? token1Symbol : token0Symbol;
-        const tokenToReturnSymbol = pangolinPrice > traderjoePrice ? token0Symbol : token1Symbol;
+        const tokenToBorrow = traderjoePrice > pangolinPrice ? this.token1 : this.token0;
+        const tokenToBorrowSymbol = pangolinPrice < traderjoePrice ? token1Symbol : token0Symbol;
+        const tokenToReturnSymbol = pangolinPrice < traderjoePrice ? token0Symbol : token1Symbol;
         let volumeToBorrow;
         let totalRepaymentInReturnToken;
         let totalReceivedTokensFromSwap;
 
-        if (tokenToBorrow === this.token0) {
+        if (tokenToBorrow === this.token0 && traderjoePrice > 0) {
+          // the bug is in this if clause
           volumeToBorrow = this.TOKEN0_TRADE;
           totalRepaymentInReturnToken = pangolinPrice * volumeToBorrow * (1 + (this.pangolinSwapRate / 100));
           totalReceivedTokensFromSwap = traderjoePrice * volumeToBorrow * (1 - (this.traderjoeSwapRate / 100));
-        }
-        else {
+        } else if (tokenToBorrow === this.token0 && traderjoePrice < 0) {
+          // handle second case here.
+          // hold on for now
+          // volumeToBorrow = this.TOKEN1_TRADE;
+          // totalRepaymentInReturnToken  = pangolinPrice * volumeToBorrow
+        } else if (tokenToBorrow === this.token1 && traderjoePrice > 0) {
           volumeToBorrow = this.TOKEN1_TRADE;
           totalRepaymentInReturnToken = (volumeToBorrow / pangolinPrice) * (1 + (this.pangolinSwapRate / 100));
           totalReceivedTokensFromSwap = (volumeToBorrow / traderjoePrice) * (1 - (this.traderjoeSwapRate / 100));
+        } else if (tokenToBorrow === this.token1 && traderjoePrice < 0) {
+          // handle fourth case here.
+          // hold on for now
         }
         const potentialProfitInReturnToken = totalReceivedTokensFromSwap - totalRepaymentInReturnToken;
         const potentialProfitInAVAX = await convertToAvax(
